@@ -17,6 +17,7 @@ $pageTitle = $pageTitle ?? 'Dashboard';
     <title><?php echo htmlspecialchars($pageTitle); ?> - Water Vending Admin</title>
     <link rel="stylesheet" href="assets/css/styles.css">
     <link rel="stylesheet" href="assets/css/dashboard.css">
+    <link rel="stylesheet" href="assets/css/main_dashboard.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
 </head>
 <body>
