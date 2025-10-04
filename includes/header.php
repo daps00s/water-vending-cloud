@@ -1,7 +1,7 @@
 <?php
 // header.php
-require_once 'includes/auth_check.php';
-require_once 'includes/db_connect.php';
+require_once __DIR__ . '/../includes/auth_check.php';
+require_once __DIR__ . '/../includes/db_connect.php';
 
 function getActiveClass($currentPage) {
     return basename($_SERVER['PHP_SELF']) === $currentPage ? 'active' : '';
@@ -90,7 +90,7 @@ $pageTitle = $pageTitle ?? 'Dashboard';
         
         <main class="content-area">
         
-        <?php require_once 'includes/user_profile_slide.php'; ?>
+        <?php require_once __DIR__ . '/../includes/user_profile_slide.php'; ?>
         
         <script>
         document.addEventListener('DOMContentLoaded', function() {
@@ -136,4 +136,5 @@ $pageTitle = $pageTitle ?? 'Dashboard';
         });
         </script>
 </body>
+
 </html>
