@@ -115,9 +115,11 @@ $top_machines = $pdo->query("SELECT d.dispenser_id, d.description, l.location_na
                              LIMIT 5")->fetchAll();
 
 // Determine trend data based on GET parameters - PostgreSQL compatible
+// Determine trend data based on GET parameters - PostgreSQL compatible
 $trend_data = [];
 $interval = 30; // Default
 $is_custom = false;
+
 if (isset($_GET['period'])) {
     $period = $_GET['period'];
     if ($period === '7') {
@@ -135,12 +137,14 @@ if (isset($_GET['period'])) {
         $trend_data = $stmt->fetchAll();
     }
 }
+
 if (!$is_custom) {
+    // PostgreSQL compatible interval syntax
     $stmt = $pdo->prepare("SELECT DATE(t.DateAndTime) as date, COALESCE(SUM(t.amount_dispensed), 0) as total_liters
                            FROM transaction t
                            LEFT JOIN dispenserlocation dl ON t.dispenser_id = dl.dispenser_id
                            WHERE dl.status = 1 AND t.DateAndTime IS NOT NULL
-                           AND t.DateAndTime >= CURRENT_DATE - INTERVAL ':interval days'
+                           AND t.DateAndTime >= CURRENT_DATE - INTERVAL '1 day' * :interval
                            GROUP BY DATE(t.DateAndTime)
                            ORDER BY date");
     $stmt->execute(['interval' => $interval]);
