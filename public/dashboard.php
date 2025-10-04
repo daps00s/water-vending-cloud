@@ -7,10 +7,10 @@ if (!isset($_SESSION['low_water_modal_shown'])) {
     $_SESSION['low_water_modal_shown'] = false;
 }
 
-// Get statistics
+// Get statistics - POSTGRESQL COMPATIBLE QUERIES
 $dispensers = $pdo->query("SELECT COUNT(*) as total FROM dispenser")->fetch();
 $active_locations = $pdo->query("SELECT COUNT(DISTINCT location_id) as total FROM dispenserlocation WHERE Status = 1")->fetch();
-$recent_transactions = $pdo->query("SELECT COUNT(*) as total FROM transaction WHERE DateAndTime >= DATE_SUB(NOW(), INTERVAL 7 DAY)")->fetch();
+$recent_transactions = $pdo->query("SELECT COUNT(*) as total FROM transaction WHERE DateAndTime >= NOW() - INTERVAL '7 days'")->fetch();
 $alerts = $pdo->query("
     SELECT 
         d.dispenser_id,
@@ -24,13 +24,28 @@ $alerts = $pdo->query("
     LEFT JOIN location l ON dl.location_id = l.location_id
     WHERE ds.water_level < 2 AND dl.Status = 1
 ")->fetchAll();
-$total_coins = $pdo->query("SELECT SUM(CAST(REGEXP_REPLACE(coin_type, '[^0-9]', '') AS UNSIGNED)) as total FROM transaction WHERE DateAndTime >= DATE_SUB(NOW(), INTERVAL 7 DAY)")->fetch();
+
+// PostgreSQL compatible coin calculation
+$total_coins = $pdo->query("
+    SELECT COALESCE(SUM(
+        CASE 
+            WHEN coin_type LIKE '%1 Peso%' THEN 1
+            WHEN coin_type LIKE '%5 Peso%' THEN 5
+            WHEN coin_type LIKE '%10 Peso%' THEN 10
+            ELSE 0 
+        END
+    ), 0) as total 
+    FROM transaction 
+    WHERE DateAndTime >= NOW() - INTERVAL '7 days'
+")->fetch();
 
 // Get recent transactions
-$transactions = $pdo->query("SELECT t.transaction_id, t.amount_dispensed, t.DateAndTime, d.Description 
-                            FROM transaction t
-                            JOIN dispenser d ON t.dispenser_id = d.dispenser_id
-                            ORDER BY t.DateAndTime DESC LIMIT 10")->fetchAll();
+$transactions = $pdo->query("
+    SELECT t.transaction_id, t.amount_dispensed, t.DateAndTime, d.Description 
+    FROM transaction t
+    JOIN dispenser d ON t.dispenser_id = d.dispenser_id
+    ORDER BY t.DateAndTime DESC LIMIT 10
+")->fetchAll();
 ?>
 <div class="content-area">
     <div class="content-wrapper">
