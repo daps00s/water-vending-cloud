@@ -1,3 +1,4 @@
+
 <?php
 $pageTitle = 'Locations';
 require_once __DIR__ . '/../includes/header.php';
@@ -50,71 +51,91 @@ $additional_transactions = [
     ['amount_dispensed' => 2.5, 'DateAndTime' => '2025-07-15 10:00:00', 'coin_type' => '5 Peso', 'dispenser_id' => 27],
     ['amount_dispensed' => 5.0, 'DateAndTime' => '2025-07-15 12:00:00', 'coin_type' => '10 Peso', 'dispenser_id' => 27],
     ['amount_dispensed' => 0.5, 'DateAndTime' => '2025-07-16 09:00:00', 'coin_type' => '1 Peso', 'dispenser_id' => 27],
-    // ... rest of your transaction data
 ];
 
-// Insert additional transactions into the database
-$stmt = $pdo->prepare("INSERT INTO transaction (amount_dispensed, DateAndTime, coin_type, dispenser_id) VALUES (?, ?, ?, ?)");
-foreach ($additional_transactions as $trans) {
-    $stmt->execute([$trans['amount_dispensed'], $trans['DateAndTime'], $trans['coin_type'], $trans['dispenser_id']]);
+// Insert additional transactions into the database (only if they don't exist to avoid duplicates)
+try {
+    $checkStmt = $pdo->prepare("SELECT COUNT(*) FROM transaction WHERE DateAndTime = ? AND dispenser_id = ?");
+    $insertStmt = $pdo->prepare("INSERT INTO transaction (amount_dispensed, DateAndTime, coin_type, dispenser_id) VALUES (?, ?, ?, ?)");
+    
+    foreach ($additional_transactions as $trans) {
+        $checkStmt->execute([$trans['DateAndTime'], $trans['dispenser_id']]);
+        $count = $checkStmt->fetchColumn();
+        
+        if ($count == 0) {
+            $insertStmt->execute([$trans['amount_dispensed'], $trans['DateAndTime'], $trans['coin_type'], $trans['dispenser_id']]);
+        }
+    }
+} catch (PDOException $e) {
+    // Silently continue if there's an error with sample data
+    error_log("Error inserting sample transactions: " . $e->getMessage());
 }
 
 // Fetch locations with machine count and total liters for table
-$locations = $pdo->query("SELECT l.*, COUNT(dl.dispenser_id) as machine_count, 
-                          COALESCE(SUM(t.amount_dispensed), 0) as total_liters
-                          FROM location l
-                          LEFT JOIN dispenserlocation dl ON l.location_id = dl.location_id AND dl.status = 1
-                          LEFT JOIN transaction t ON dl.dispenser_id = t.dispenser_id
-                          GROUP BY l.location_id")->fetchAll();
+$locations = $pdo->query("
+    SELECT l.*, 
+           COUNT(dl.dispenser_id) as machine_count, 
+           COALESCE(SUM(t.amount_dispensed), 0) as total_liters
+    FROM location l
+    LEFT JOIN dispenserlocation dl ON l.location_id = dl.location_id AND dl.status = 1
+    LEFT JOIN transaction t ON dl.dispenser_id = t.dispenser_id
+    GROUP BY l.location_id, l.location_name, l.address, l.latitude, l.longitude
+")->fetchAll();
 
-// PostgreSQL compatible queries using STRING_AGG instead of GROUP_CONCAT
 // Fetch all locations for map (only active dispensers)
-$all_locations = $pdo->query("SELECT l.location_id, l.location_name, l.latitude, l.longitude, 
-                              COALESCE(SUM(t.amount_dispensed), 0) as total_liters,
-                              STRING_AGG(DISTINCT d.description, ', ') as descriptions
-                              FROM location l
-                              LEFT JOIN dispenserlocation dl ON l.location_id = dl.location_id AND dl.status = 1
-                              LEFT JOIN dispenser d ON dl.dispenser_id = d.dispenser_id
-                              LEFT JOIN transaction t ON dl.dispenser_id = t.dispenser_id
-                              WHERE l.latitude IS NOT NULL AND l.longitude IS NOT NULL
-                              GROUP BY l.location_id")->fetchAll();
+$all_locations = $pdo->query("
+    SELECT l.location_id, l.location_name, l.latitude, l.longitude, 
+           COALESCE(SUM(t.amount_dispensed), 0) as total_liters,
+           STRING_AGG(DISTINCT d.description, ', ') as descriptions
+    FROM location l
+    LEFT JOIN dispenserlocation dl ON l.location_id = dl.location_id AND dl.status = 1
+    LEFT JOIN dispenser d ON dl.dispenser_id = d.dispenser_id
+    LEFT JOIN transaction t ON dl.dispenser_id = t.dispenser_id
+    WHERE l.latitude IS NOT NULL AND l.longitude IS NOT NULL
+    GROUP BY l.location_id, l.location_name, l.latitude, l.longitude
+")->fetchAll();
 
 // Fetch ITC-specific dispensers (at CET - ITC coordinates)
-$itc_dispensers = $pdo->query("SELECT l.location_id, l.location_name, l.latitude, l.longitude, 
-                               COALESCE(SUM(t.amount_dispensed), 0) as total_liters,
-                               STRING_AGG(DISTINCT d.description, ', ') as descriptions
-                               FROM location l
-                               LEFT JOIN dispenserlocation dl ON l.location_id = dl.location_id AND dl.status = 1
-                               LEFT JOIN dispenser d ON dl.dispenser_id = d.dispenser_id
-                               LEFT JOIN transaction t ON dl.dispenser_id = t.dispenser_id
-                               WHERE l.latitude = 15.63954742 AND l.longitude = 120.41917920
-                               GROUP BY l.location_id")->fetchAll();
+$itc_dispensers = $pdo->query("
+    SELECT l.location_id, l.location_name, l.latitude, l.longitude, 
+           COALESCE(SUM(t.amount_dispensed), 0) as total_liters,
+           STRING_AGG(DISTINCT d.description, ', ') as descriptions
+    FROM location l
+    LEFT JOIN dispenserlocation dl ON l.location_id = dl.location_id AND dl.status = 1
+    LEFT JOIN dispenser d ON dl.dispenser_id = d.dispenser_id
+    LEFT JOIN transaction t ON dl.dispenser_id = t.dispenser_id
+    WHERE l.latitude = 15.63954742 AND l.longitude = 120.41917920
+    GROUP BY l.location_id, l.location_name, l.latitude, l.longitude
+")->fetchAll();
 
 // Fetch top 5 locations (highest total liters dispensed)
-$top_locations = $pdo->query("SELECT l.location_id, l.location_name, l.latitude, l.longitude, 
-                              COALESCE(SUM(t.amount_dispensed), 0) as total_liters,
-                              STRING_AGG(DISTINCT d.description, ', ') as descriptions
-                              FROM location l
-                              LEFT JOIN dispenserlocation dl ON l.location_id = dl.location_id AND dl.status = 1
-                              LEFT JOIN dispenser d ON dl.dispenser_id = d.dispenser_id
-                              LEFT JOIN transaction t ON dl.dispenser_id = t.dispenser_id
-                              WHERE l.latitude IS NOT NULL AND l.longitude IS NOT NULL
-                              GROUP BY l.location_id
-                              ORDER BY total_liters DESC
-                              LIMIT 5")->fetchAll();
+$top_locations = $pdo->query("
+    SELECT l.location_id, l.location_name, l.latitude, l.longitude, 
+           COALESCE(SUM(t.amount_dispensed), 0) as total_liters,
+           STRING_AGG(DISTINCT d.description, ', ') as descriptions
+    FROM location l
+    LEFT JOIN dispenserlocation dl ON l.location_id = dl.location_id AND dl.status = 1
+    LEFT JOIN dispenser d ON dl.dispenser_id = d.dispenser_id
+    LEFT JOIN transaction t ON dl.dispenser_id = t.dispenser_id
+    WHERE l.latitude IS NOT NULL AND l.longitude IS NOT NULL
+    GROUP BY l.location_id, l.location_name, l.latitude, l.longitude
+    ORDER BY total_liters DESC
+    LIMIT 5
+")->fetchAll();
 
-// Fetch top 5 machines (highest total liters dispensed)
-$top_machines = $pdo->query("SELECT d.dispenser_id, d.description, l.location_name, 
-                             COALESCE(SUM(t.amount_dispensed), 0) as total_liters
-                             FROM dispenser d
-                             LEFT JOIN dispenserlocation dl ON d.dispenser_id = dl.dispenser_id AND dl.status = 1
-                             LEFT JOIN location l ON dl.location_id = l.location_id
-                             LEFT JOIN transaction t ON d.dispenser_id = t.dispenser_id
-                             GROUP BY d.dispenser_id, d.description, l.location_name
-                             ORDER BY total_liters DESC
-                             LIMIT 5")->fetchAll();
+// Fetch top 5 machines (highest total liters dispensed) - Fixed column name
+$top_machines = $pdo->query("
+    SELECT d.dispenser_id, d.description, l.location_name, 
+           COALESCE(SUM(t.amount_dispensed), 0) as total_liters
+    FROM dispenser d
+    LEFT JOIN dispenserlocation dl ON d.dispenser_id = dl.dispenser_id AND dl.status = 1
+    LEFT JOIN location l ON dl.location_id = l.location_id
+    LEFT JOIN transaction t ON d.dispenser_id = t.dispenser_id
+    GROUP BY d.dispenser_id, d.description, l.location_name
+    ORDER BY total_liters DESC
+    LIMIT 5
+")->fetchAll();
 
-// Determine trend data based on GET parameters - PostgreSQL compatible
 // Determine trend data based on GET parameters - PostgreSQL compatible
 $trend_data = [];
 $interval = 30; // Default
@@ -126,30 +147,45 @@ if (isset($_GET['period'])) {
         $interval = 7;
     } elseif ($period === 'custom' && isset($_GET['start']) && isset($_GET['end'])) {
         $is_custom = true;
-        $stmt = $pdo->prepare("SELECT DATE(t.DateAndTime) as date, COALESCE(SUM(t.amount_dispensed), 0) as total_liters
-                               FROM transaction t
-                               LEFT JOIN dispenserlocation dl ON t.dispenser_id = dl.dispenser_id
-                               WHERE dl.status = 1 AND t.DateAndTime IS NOT NULL
-                               AND DATE(t.DateAndTime) BETWEEN :start AND :end
-                               GROUP BY DATE(t.DateAndTime)
-                               ORDER BY date");
-        $stmt->execute(['start' => $_GET['start'], 'end' => $_GET['end']]);
-        $trend_data = $stmt->fetchAll();
+        try {
+            $stmt = $pdo->prepare("
+                SELECT DATE(t.DateAndTime) as date, COALESCE(SUM(t.amount_dispensed), 0) as total_liters
+                FROM transaction t
+                LEFT JOIN dispenserlocation dl ON t.dispenser_id = dl.dispenser_id
+                WHERE dl.status = 1 AND t.DateAndTime IS NOT NULL
+                AND DATE(t.DateAndTime) BETWEEN :start AND :end
+                GROUP BY DATE(t.DateAndTime)
+                ORDER BY date
+            ");
+            $stmt->execute(['start' => $_GET['start'], 'end' => $_GET['end']]);
+            $trend_data = $stmt->fetchAll();
+        } catch (PDOException $e) {
+            error_log("Error fetching custom trend data: " . $e->getMessage());
+            $trend_data = [];
+        }
     }
 }
 
 if (!$is_custom) {
-    // PostgreSQL compatible interval syntax
-    $stmt = $pdo->prepare("SELECT DATE(t.DateAndTime) as date, COALESCE(SUM(t.amount_dispensed), 0) as total_liters
-                           FROM transaction t
-                           LEFT JOIN dispenserlocation dl ON t.dispenser_id = dl.dispenser_id
-                           WHERE dl.status = 1 AND t.DateAndTime IS NOT NULL
-                           AND t.DateAndTime >= CURRENT_DATE - INTERVAL '1 day' * :interval
-                           GROUP BY DATE(t.DateAndTime)
-                           ORDER BY date");
-    $stmt->execute(['interval' => $interval]);
-    $trend_data = $stmt->fetchAll();
+    try {
+        // PostgreSQL compatible interval syntax - using direct parameter substitution
+        $stmt = $pdo->prepare("
+            SELECT DATE(t.DateAndTime) as date, COALESCE(SUM(t.amount_dispensed), 0) as total_liters
+            FROM transaction t
+            LEFT JOIN dispenserlocation dl ON t.dispenser_id = dl.dispenser_id
+            WHERE dl.status = 1 AND t.DateAndTime IS NOT NULL
+            AND t.DateAndTime >= CURRENT_DATE - INTERVAL '1 day' * :interval
+            GROUP BY DATE(t.DateAndTime)
+            ORDER BY date
+        ");
+        $stmt->execute(['interval' => $interval]);
+        $trend_data = $stmt->fetchAll();
+    } catch (PDOException $e) {
+        error_log("Error fetching trend data: " . $e->getMessage());
+        $trend_data = [];
+    }
 }
+
 if (!$trend_data) {
     $trend_data = [];
 }
@@ -157,29 +193,35 @@ if (!$trend_data) {
 // Calculate forecast for 30 days from now
 $forecast = null;
 $forecast_date = date('Y-m-d', strtotime('+30 days'));
-$first_date = $trend_data && !empty($trend_data) ? reset($trend_data)['date'] : null;
-if ($trend_data && count($trend_data) >= 2 && $first_date) {
-    $dates = array_map(function($row) use ($first_date) {
-        return (strtotime($row['date']) - strtotime($first_date)) / 86400; // Days since first date
-    }, $trend_data);
-    $liters = array_column($trend_data, 'total_liters');
-    $n = count($dates);
-    $sum_x = array_sum($dates);
-    $sum_y = array_sum($liters);
-    $sum_xy = 0;
-    $sum_xx = 0;
-    for ($i = 0; $i < $n; $i++) {
-        $sum_xy += $dates[$i] * $liters[$i];
-        $sum_xx += $dates[$i] * $dates[$i];
+if ($trend_data && count($trend_data) >= 2) {
+    $first_date = reset($trend_data)['date'];
+    if ($first_date) {
+        $dates = array_map(function($row) use ($first_date) {
+            return (strtotime($row['date']) - strtotime($first_date)) / 86400; // Days since first date
+        }, $trend_data);
+        $liters = array_column($trend_data, 'total_liters');
+        $n = count($dates);
+        $sum_x = array_sum($dates);
+        $sum_y = array_sum($liters);
+        $sum_xy = 0;
+        $sum_xx = 0;
+        for ($i = 0; $i < $n; $i++) {
+            $sum_xy += $dates[$i] * $liters[$i];
+            $sum_xx += $dates[$i] * $dates[$i];
+        }
+        
+        $denominator = ($n * $sum_xx - $sum_x * $sum_x);
+        if ($denominator != 0) {
+            $slope = ($n * $sum_xy - $sum_x * $sum_y) / $denominator;
+            $intercept = ($sum_y - $slope * $sum_x) / $n;
+            $forecast_days = (strtotime($forecast_date) - strtotime($first_date)) / 86400;
+            $forecast = max(0, $slope * $forecast_days + $intercept);
+        }
     }
-    $slope = ($n * $sum_xy - $sum_x * $sum_y) / ($n * $sum_xx - $sum_x * $sum_x);
-    $intercept = ($sum_y - $slope * $sum_x) / $n;
-    $forecast_days = (strtotime($forecast_date) - strtotime($first_date)) / 86400;
-    $forecast = max(0, $slope * $forecast_days + $intercept);
 }
 
 // Fetch max total liters for color scaling
-$max_total_liters = $top_locations ? $top_locations[0]['total_liters'] : 1; // Avoid division by zero
+$max_total_liters = $top_locations ? (float)$top_locations[0]['total_liters'] : 1; // Avoid division by zero
 ?>
 <div class="content-area">
     <div class="content-wrapper">
