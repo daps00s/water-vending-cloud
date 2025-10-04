@@ -18,6 +18,15 @@ $pageTitle = $pageTitle ?? 'Dashboard';
     <link rel="stylesheet" href="assets/css/styles.css">
     <link rel="stylesheet" href="assets/css/dashboard.css">
     <link rel="stylesheet" href="assets/css/main_dashboard.css">
+    <link rel="stylesheet" href="assets/css/locations.css">
+    <link rel="stylesheet" href="assets/css/machines.css">
+    <link rel="stylesheet" href="assets/css/transactions.css">
+    <link rel="stylesheet" href="assets/css/coin_collections.css">
+    <link rel="stylesheet" href="assets/css/water_levels.css">
+    <link rel="stylesheet" href="assets/css/reports.css">
+    <link rel="stylesheet" href="assets/css/forecast.css">
+    <link rel="stylesheet" href="assets/css/backup.css">
+    <link rel="stylesheet" href="assets/css/user_profile_slide.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
 </head>
 <body>
