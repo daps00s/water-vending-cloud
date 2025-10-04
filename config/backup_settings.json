@@ -1,0 +1,8 @@
+{
+    "backup_hour": 2,
+    "backup_minute": 0,
+    "last_backup": null,
+    "backup_date": "2025-08-18",
+    "frequency": "daily",
+    "month_day": 31
+}

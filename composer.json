@@ -1,0 +1,11 @@
+{
+    "require": {
+        "php": "^8.0",
+        "ext-pdo": "*",
+        "ext-json": "*",
+        "ext-mysqli": "*"
+    },
+    "scripts": {
+        "post-deploy": "chmod -R 755 public && chmod 755 logs"
+    }
+}
