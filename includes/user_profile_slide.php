@@ -1,7 +1,7 @@
 <?php
 // includes/user_profile_slide.php
 if(!isset($_SESSION)) { session_start(); }
-require_once 'db_connect.php';
+require_once __DIR__ . '/../includes/db_connect.php';
 
 // Handle profile update
 $notification = '';
@@ -382,4 +382,5 @@ document.addEventListener('DOMContentLoaded', function() {
 
     observer.observe(profileSlide, { attributes: true });
 });
+
 </script>
